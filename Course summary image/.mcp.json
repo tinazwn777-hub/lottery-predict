@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "servers": {
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp"],
+      "disabled": false
+    }
+  }
+}

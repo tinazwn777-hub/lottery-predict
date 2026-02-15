@@ -1,0 +1,114 @@
+// Reset and base styles
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+// Element Plus overrides
+.el-button--primary {
+  --el-button-bg-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --el-button-border-color: transparent;
+  --el-button-hover-bg-color: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+  --el-button-hover-border-color: transparent;
+}
+
+.el-button--primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+
+  &:hover, &:focus {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+  }
+}
+
+.el-input__wrapper:focus-within {
+  box-shadow: 0 0 0 1px #667eea inset !important;
+}
+
+.el-progress-bar__outer {
+  border-radius: 4px;
+}
+
+.el-progress-bar__inner {
+  border-radius: 4px;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+}
+
+.el-card {
+  --el-card-border-radius: 12px;
+}
+
+.el-tabs__item.is-active {
+  color: #667eea !important;
+}
+
+.el-tabs__active-bar {
+  background-color: #667eea !important;
+}
+
+.el-upload-dragger {
+  border-color: #d1d5db !important;
+  border-radius: 8px;
+
+  &:hover {
+    border-color: #667eea !important;
+  }
+}
+
+// Scrollbar styles
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+
+  &:hover {
+    background: #94a3b8;
+  }
+}
+
+// Animation utilities
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-enter-from {
+  transform: translateX(20px);
+  opacity: 0;
+}
+
+.slide-leave-to {
+  transform: translateX(-20px);
+  opacity: 0;
+}

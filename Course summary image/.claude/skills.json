@@ -1,0 +1,100 @@
+{
+  "version": "1.0.0",
+  "name": "course-summary-image",
+  "description": "从网页URL或PDF生成美观的课程总结图片",
+  "commands": [
+    {
+      "name": "generate-from-web",
+      "description": "从网页URL提取内容并生成总结图片",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "网页URL地址",
+            "pattern": "^https?://"
+          },
+          "title": {
+            "type": "string",
+            "description": "图片标题（可选，默认使用网页标题）"
+          },
+          "theme": {
+            "type": "string",
+            "enum": ["light", "dark"],
+            "description": "主题风格：light(浅色)或dark(深色)"
+          }
+        },
+        "required": ["url"]
+      }
+    },
+    {
+      "name": "generate-from-pdf",
+      "description": "上传PDF文件并生成总结图片",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "PDF文件路径"
+          },
+          "title": {
+            "type": "string",
+            "description": "图片标题（可选，默认使用文件名）"
+          },
+          "theme": {
+            "type": "string",
+            "enum": ["light", "dark"],
+            "description": "主题风格：light(浅色)或dark(深色)"
+          }
+        },
+        "required": ["file_path"]
+      }
+    },
+    {
+      "name": "list-tasks",
+      "description": "列出所有历史任务",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "description": "返回任务数量限制"
+          }
+        }
+      }
+    },
+    {
+      "name": "get-task-status",
+      "description": "查询任务处理状态",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "description": "任务ID"
+          }
+        },
+        "required": ["task_id"]
+      }
+    },
+    {
+      "name": "regenerate-image",
+      "description": "使用不同主题重新生成图片",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "description": "原任务ID"
+          },
+          "theme": {
+            "type": "string",
+            "enum": ["light", "dark"],
+            "description": "新主题风格"
+          }
+        },
+        "required": ["task_id", "theme"]
+      }
+    }
+  ]
+}
