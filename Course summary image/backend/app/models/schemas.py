@@ -26,17 +26,19 @@ class TaskCreateRequest(BaseModel):
     source_type: SourceType
     source_url: Optional[HttpUrl] = None
     source_filename: Optional[str] = None
+    gradient_theme: Optional[int] = None  # 1-6 对应6种渐变主题
     config: Optional[Dict[str, Any]] = None
 
 
 class ImageConfig(BaseModel):
     theme: ThemeType = ThemeType.LIGHT
+    gradient_theme: Optional[int] = None  # 1-6 对应6种渐变主题
     title: Optional[str] = None
-    font_size: int = 24
+    font_size: int = 20
     line_height: int = 1.8
     primary_color: str = "#2563eb"
-    width: int = 1200
-    height: int = 1600
+    width: int = 1200  # 横向 A4 比例
+    height: int = 800
 
 
 # Response schemas

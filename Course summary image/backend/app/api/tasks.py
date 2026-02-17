@@ -10,14 +10,14 @@ import uuid
 router = APIRouter()
 
 
-def run_pipeline_sync(task_id: str, source_type: str, source: str, filename: str = None):
+def run_pipeline_sync(task_id: str, source_type: str, source: str, filename: str = None, gradient_theme: int = None):
     """同步执行完整处理流程"""
     import asyncio
     from datetime import datetime
     from app.core.database import AsyncSessionLocal
     from app.services.parser.web_parser import WebParser
     from app.services.parser.pdf_parser import PDFParser
-    from app.services.image.generator import ImageGenerator
+    from app.services.image.api_screenshot import ScreenshotAPIService
     from app.core.config import settings
     from app.models.schemas import ParsedContent, ImageConfig as ImageConfigSchema, ThemeType as ThemeTypeEnum
     import os
@@ -47,24 +47,47 @@ def run_pipeline_sync(task_id: str, source_type: str, source: str, filename: str
                 task.progress = 50
                 await session.commit()
 
-                # Step 2: Generate images for both themes
-                config = ImageConfigSchema()
-                generator = ImageGenerator()
+                # Step 2: Generate images using API screenshot service
+                config = ImageConfigSchema(gradient_theme=gradient_theme)
+                screenshot_service = ScreenshotAPIService()
                 output_dir = settings.OUTPUT_DIR
                 os.makedirs(output_dir, exist_ok=True)
 
-                for theme in [ThemeTypeEnum.LIGHT, ThemeTypeEnum.DARK]:
-                    output_path = os.path.join(output_dir, f"{task_id}_{theme.value}.png")
-                    generator.generate(content, config, output_path)
+                # 生成渐变主题或简洁主题
+                if gradient_theme:
+                    output_path = os.path.join(output_dir, f"{task_id}_gradient_{gradient_theme}.png")
+                    try:
+                        screenshot_service.generate(content, config, output_path)
+                    except Exception as e:
+                        # 如果 API 失败，尝试本地渲染
+                        screenshot_service.generate_local(content, config, output_path)
 
                     image = ImageModel(
                         task_id=task.id,
-                        theme=theme.value,
+                        theme=f"gradient_{gradient_theme}",
                         local_path=output_path,
-                        width=config.width,
-                        height=config.height
+                        width=1200,
+                        height=800
                     )
                     session.add(image)
+                else:
+                    # 默认生成 light 和 dark 两种主题
+                    for theme in [ThemeTypeEnum.LIGHT, ThemeTypeEnum.DARK]:
+                        output_path = os.path.join(output_dir, f"{task_id}_{theme.value}.png")
+                        config.theme = theme
+                        try:
+                            screenshot_service.generate(content, config, output_path)
+                        except Exception as e:
+                            screenshot_service.generate_local(content, config, output_path)
+
+                        image = ImageModel(
+                            task_id=task.id,
+                            theme=theme.value,
+                            local_path=output_path,
+                            width=1200,
+                            height=800
+                        )
+                        session.add(image)
 
                 task.status = TaskStatus.COMPLETED.value
                 task.progress = 100
@@ -87,9 +110,10 @@ def regenerate_image_sync(task_id: str, theme: str):
     import asyncio
     from datetime import datetime
     from app.core.database import AsyncSessionLocal
-    from app.services.image.generator import ImageGenerator
+    from app.services.image.api_screenshot import ScreenshotAPIService
     from app.core.config import settings
     from app.models.schemas import ParsedContent, ImageConfig as ImageConfigSchema, ThemeType as ThemeTypeEnum
+    from sqlalchemy import select
     import os
 
     async def _regenerate():
@@ -106,17 +130,25 @@ def regenerate_image_sync(task_id: str, theme: str):
                 # Reconstruct content
                 content = ParsedContent(**task.content)
 
+                # Determine if gradient theme
+                if theme.startswith("gradient_"):
+                    gradient_idx = int(theme.split("_")[1])
+                    config = ImageConfigSchema(gradient_theme=gradient_idx)
+                else:
+                    config = ImageConfigSchema(theme=ThemeTypeEnum(theme))
+
                 # Generate image
-                config = ImageConfigSchema(theme=ThemeTypeEnum(theme))
-                generator = ImageGenerator()
+                screenshot_service = ScreenshotAPIService()
                 output_dir = settings.OUTPUT_DIR
                 os.makedirs(output_dir, exist_ok=True)
                 output_path = os.path.join(output_dir, f"{task_id}_{theme}.png")
 
-                generator.generate(content, config, output_path)
+                try:
+                    screenshot_service.generate(content, config, output_path)
+                except Exception as e:
+                    screenshot_service.generate_local(content, config, output_path)
 
                 # Update or create image record
-                from sqlalchemy import select
                 result = await session.execute(
                     select(ImageModel).where(
                         ImageModel.task_id == task.id,
@@ -127,16 +159,16 @@ def regenerate_image_sync(task_id: str, theme: str):
 
                 if existing_image:
                     existing_image.local_path = output_path
-                    existing_image.width = config.width
-                    existing_image.height = config.height
+                    existing_image.width = 1200
+                    existing_image.height = 800
                     image_id = existing_image.id
                 else:
                     image = ImageModel(
                         task_id=task.id,
                         theme=theme,
                         local_path=output_path,
-                        width=config.width,
-                        height=config.height
+                        width=1200,
+                        height=800
                     )
                     session.add(image)
                     image_id = image.id
@@ -160,7 +192,6 @@ def regenerate_image_sync(task_id: str, theme: str):
 @router.post("/tasks", response_model=TaskResponse, summary="创建新任务")
 async def create_task(request: TaskCreateRequest, background_tasks: BackgroundTasks):
     """Create a new task for parsing content and generating image"""
-    # Create task record
     from app.core.database import AsyncSessionLocal
     from sqlalchemy import select
 
@@ -183,7 +214,8 @@ async def create_task(request: TaskCreateRequest, background_tasks: BackgroundTa
             str(task.id),
             request.source_type.value,
             source,
-            request.source_filename
+            request.source_filename,
+            request.gradient_theme
         )
 
         return TaskResponse(**task.to_dict())
@@ -256,13 +288,15 @@ async def regenerate_image(task_id: str, theme: str, background_tasks: Backgroun
     from app.core.database import AsyncSessionLocal
     from sqlalchemy import select
 
+    # Validate theme
+    valid_themes = [t.value for t in ThemeType] + [f"gradient_{i}" for i in range(1, 7)]
+    if theme not in valid_themes:
+        raise HTTPException(status_code=400, detail="Invalid theme")
+
     try:
         task_uuid = uuid.UUID(task_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid task ID format")
-
-    if theme not in [t.value for t in ThemeType]:
-        raise HTTPException(status_code=400, detail="Invalid theme")
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(

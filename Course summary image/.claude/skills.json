@@ -20,8 +20,8 @@
           },
           "theme": {
             "type": "string",
-            "enum": ["light", "dark"],
-            "description": "主题风格：light(浅色)或dark(深色)"
+            "enum": ["light", "dark", "gradient_1", "gradient_2", "gradient_3", "gradient_4", "gradient_5", "gradient_6"],
+            "description": "主题风格：light(浅色)、dark(深色)、gradient_1~gradient_6(渐变主题)"
           }
         },
         "required": ["url"]
@@ -43,8 +43,8 @@
           },
           "theme": {
             "type": "string",
-            "enum": ["light", "dark"],
-            "description": "主题风格：light(浅色)或dark(深色)"
+            "enum": ["light", "dark", "gradient_1", "gradient_2", "gradient_3", "gradient_4", "gradient_5", "gradient_6"],
+            "description": "主题风格：light(浅色)、dark(深色)、gradient_1~gradient_6(渐变主题)"
           }
         },
         "required": ["file_path"]
@@ -89,7 +89,7 @@
           },
           "theme": {
             "type": "string",
-            "enum": ["light", "dark"],
+            "enum": ["light", "dark", "gradient_1", "gradient_2", "gradient_3", "gradient_4", "gradient_5", "gradient_6"],
             "description": "新主题风格"
           }
         },
