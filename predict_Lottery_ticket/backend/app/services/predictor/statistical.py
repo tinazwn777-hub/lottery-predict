@@ -346,7 +346,7 @@ class StatisticalPredictor:
         生成预测号码
 
         Args:
-            method: 预测方法 (frequency/hot_cold/random)
+            method: 预测方法 (frequency/hot_cold/random/missing/smart)
             count: 生成注数
 
         Returns:
@@ -367,12 +367,230 @@ class StatisticalPredictor:
                 pred = self._predict_by_hot_cold(records)
             elif method == "missing":
                 pred = self._predict_by_missing(records)
+            elif method == "smart":
+                pred = self._predict_by_smart_strategy(records)
             else:
                 pred = self._generate_random_prediction(1)[0]
 
             predictions.append(pred)
 
         return predictions
+
+    def _predict_by_smart_strategy(self, records: List[Dict]) -> Dict:
+        """
+        智能综合策略预测
+
+        综合多维度统计分析，自动计算最优号码组合：
+        1. 号码频率权重
+        2. 冷热号平衡
+        3. 遗漏值分析
+        4. 奇偶比分布
+        5. 尾数分布
+        6. 连号避免
+        7. 区间分布
+        """
+        # 获取各项统计数据
+        red_counter, blue_counter = self.analyze_frequency(records)
+        red_missing = self.analyze_missing(records)
+        odd_even_dist = self.analyze_odd_even(records)
+        tail_dist = self.analyze_tail(records)
+        consecutive_stats = self.analyze_consecutive(records)
+
+        # 1. 频率得分 (0-100)
+        red_freq_scores = self._calc_frequency_scores(red_counter)
+        blue_freq_scores = self._calc_frequency_scores(blue_counter)
+
+        # 2. 遗漏值得分 (遗漏值越接近平均值越好)
+        red_missing_scores = self._calc_missing_scores(red_missing, self.config["red_range"][1])
+        blue_missing_scores = self._calc_missing_scores(red_missing, self.config["blue_range"][1])
+
+        # 3. 尾数分布得分 (避免同尾号过多)
+        tail_scores = self._calc_tail_scores(tail_dist)
+
+        # 4. 奇偶比得分 (根据历史最常见比例)
+        odd_even_scores = self._calc_odd_even_scores(odd_even_dist)
+
+        # 综合权重计算
+        red_weights = {}
+        for n in range(1, self.config["red_range"][1] + 1):
+            freq = red_freq_scores.get(n, 50)
+            miss = red_missing_scores.get(n, 50)
+            tail = tail_scores.get(n % 10, 50)
+            odd = odd_even_scores.get(n, 50)
+
+            # 权重分配: 频率40%, 遗漏25%, 尾数20%, 奇偶15%
+            red_weights[n] = freq * 0.40 + miss * 0.25 + tail * 0.20 + odd * 0.15
+
+        blue_weights = {}
+        for n in range(1, self.config["blue_range"][1] + 1):
+            freq = blue_freq_scores.get(n, 50)
+            miss = blue_missing_scores.get(n, 50)
+            # 蓝球尾数权重较低
+            blue_weights[n] = freq * 0.60 + miss * 0.40
+
+        # 归一化权重
+        red_weights = self._normalize_weights(red_weights)
+        blue_weights = self._normalize_weights(blue_weights)
+
+        # 使用加权随机选择，生成多组候选
+        candidates = []
+        for _ in range(20):  # 生成20组候选
+            red_nums = self._weighted_select(red_weights, self.config["red_range"][1], self.config["red_count"])
+            blue_nums = self._weighted_select(blue_weights, self.config["blue_range"][1], self.config["blue_count"])
+            candidates.append((red_nums, blue_nums))
+
+        # 选择最优候选（综合评分最高）
+        best_candidate = max(candidates, key=lambda c: self._evaluate_candidate(c[0], c[1], red_counter, blue_counter, consecutive_stats))
+
+        return {
+            "red_balls": [f"{n:02d}" for n in sorted(best_candidate[0])],
+            "blue_balls": [f"{n:02d}" for n in sorted(best_candidate[1])],
+            "method": "smart"
+        }
+
+    def _calc_frequency_scores(self, counter: Counter) -> Dict[int, float]:
+        """计算频率得分 (0-100)"""
+        if not counter:
+            return {}
+
+        max_freq = max(counter.values()) if counter else 1
+        min_freq = min(counter.values()) if counter else 0
+
+        scores = {}
+        for num in counter:
+            # 归一化到 0-100
+            if max_freq > min_freq:
+                scores[num] = 50 + 50 * (counter[num] - min_freq) / (max_freq - min_freq)
+            else:
+                scores[num] = 75  # 默认中等分数
+
+        return scores
+
+    def _calc_missing_scores(self, missing: Dict, ball_range: int) -> Dict[int, float]:
+        """计算遗漏值得分 (遗漏值越接近理论平均值越好)"""
+        if not missing:
+            return {n: 70 for n in range(1, ball_range + 1)}
+
+        # 理论平均遗漏值 = 总期数 / 号码个数
+        total = sum(missing.values()) / len(missing) if missing else 10
+
+        scores = {}
+        for n in range(1, ball_range + 1):
+            miss = missing.get(n, total * 2)
+            # 遗漏值越接近平均值，分数越高
+            diff = abs(miss - total)
+            scores[n] = max(20, 100 - diff * 5)
+
+        return scores
+
+    def _calc_tail_scores(self, tail_dist: Dict) -> Dict[int, float]:
+        """计算尾数得分 (避免选择同尾号过多的组合)"""
+        if not tail_dist:
+            return {n: 70 for n in range(10)}
+
+        # 统计每个尾数已出现的次数
+        tail_count = {int(k): v for k, v in tail_dist.items()}
+
+        scores = {}
+        for t in range(10):
+            count = tail_count.get(t, 0)
+            # 出现次数少的尾数分数高
+            max_count = max(tail_count.values()) if tail_count else 1
+            scores[t] = 30 + 70 * (1 - count / max_count) if max_count > 0 else 70
+
+        return scores
+
+    def _calc_odd_even_scores(self, odd_even_dist: Dict) -> Dict[int, float]:
+        """计算奇偶得分 (根据历史最常见的奇偶比)"""
+        if not odd_even_dist:
+            return {n: 70 for n in range(1, 34)}
+
+        # 找出最常见的奇偶比
+        most_common = max(odd_even_dist.items(), key=lambda x: x[1])[0]
+        odd_count, even_count = map(int, most_common.split(':'))
+
+        scores = {}
+        for n in range(1, 34):
+            is_odd = n % 2 == 1
+            # 如果该位置的奇偶性与最常见的比例匹配，给高分
+            expected_odd_ratio = odd_count / (odd_count + even_count) if (odd_count + even_count) > 0 else 0.5
+
+            if is_odd:
+                scores[n] = 50 + 50 * expected_odd_ratio
+            else:
+                scores[n] = 50 + 50 * (1 - expected_odd_ratio)
+
+        return scores
+
+    def _normalize_weights(self, weights: Dict[int, float]) -> Dict[int, float]:
+        """归一化权重为概率分布"""
+        total = sum(weights.values())
+        if total == 0:
+            # 如果全是0，返回均匀分布
+            count = len(weights)
+            return {k: 1.0 / count for k in weights}
+        return {k: v / total for k, v in weights.items()}
+
+    def _weighted_select(self, weights: Dict[int, float], ball_range: int, count: int) -> List[int]:
+        """基于权重随机选择号码"""
+        numbers = list(range(1, ball_range + 1))
+        probs = [weights.get(n, 0) for n in numbers]
+
+        # 如果所有权重为0，使用均匀分布
+        if sum(probs) == 0:
+            probs = [1.0 / ball_range] * ball_range
+
+        selected = random.choices(numbers, weights=probs, k=count)
+        selected = sorted(set(selected))
+
+        # 如果去重后数量不够，随机补充
+        while len(selected) < count:
+            remaining = [n for n in numbers if n not in selected]
+            if remaining:
+                selected.append(random.choice(remaining))
+            selected = sorted(selected)
+
+        return selected
+
+    def _evaluate_candidate(self, red_nums: List[int], blue_nums: List[int],
+                           red_counter: Counter, blue_counter: Counter,
+                           consecutive_stats: Dict) -> float:
+        """
+        评估候选号码组合的优劣
+
+        返回综合评分 (越高越好)
+        """
+        score = 0
+
+        # 1. 频率得分 (号码总出现次数)
+        score += sum(red_counter.get(n, 0) for n in red_nums)
+        score += sum(blue_counter.get(n, 0) for n in blue_nums) * 2  # 蓝球权重稍高
+
+        # 2. 连号惩罚 (避免过多连号)
+        red_sorted = sorted(red_nums)
+        consecutive_count = 0
+        for i in range(len(red_sorted) - 1):
+            if red_sorted[i + 1] - red_sorted[i] == 1:
+                consecutive_count += 1
+        score -= consecutive_count * 5  # 每组连号扣5分
+
+        # 3. 尾数多样性奖励 (不同尾数越多越好)
+        red_tails = len(set(n % 10 for n in red_nums))
+        score += red_tails * 3  # 每个不同尾数加3分
+
+        # 4. 区间分布奖励 (号码分布在不同区间)
+        if self.lottery_type == "ssq":
+            ranges = [(1, 11), (12, 22), (23, 33)]
+        else:
+            ranges = [(1, 12), (13, 24), (25, 35)]
+
+        range_count = 0
+        for start, end in ranges:
+            if any(start <= n <= end for n in red_nums):
+                range_count += 1
+        score += range_count * 4  # 每个有号码的区间加4分
+
+        return score
 
     def _predict_by_frequency(self, records: List[Dict]) -> Dict:
         """基于频率的预测"""

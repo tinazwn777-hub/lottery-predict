@@ -421,35 +421,28 @@ const getPredictionResult = (pred) => {
 // 大乐透: 周一、周三、周六开奖 (3次/周)
 const getEstimatedDrawDate = (pred) => {
   const lotteryType = pred.lottery_type
-  const targetIssue = pred.target_issue
-
-  if (!targetIssue) return '-'
 
   // 双色球开奖日: 周二(2), 周四(4), 周日(0)
   // 大乐透开奖日: 周一(1), 周三(3), 周六(5)
   const drawDays = lotteryType === 'ssq' ? [2, 4, 0] : [1, 3, 5]
 
-  // 从预测期号中提取年份
-  const year = parseInt(targetIssue.substring(0, 4))
-  const issueNum = parseInt(targetIssue.substring(4))
+  // 从当前日期开始找下一个开奖日
+  const today = new Date()
+  const checkDate = new Date(today)
 
-  // 计算这是该年的第几期
-  // 假设每期对应一周
-  const issueDate = new Date(year, 0, 1 + (issueNum - 1) * 7)
-
-  // 找到最近的开奖日
-  while (true) {
-    const dayOfWeek = issueDate.getDay()
+  // 最多检查 10 天
+  for (let i = 0; i < 10; i++) {
+    const dayOfWeek = checkDate.getDay()
     if (drawDays.includes(dayOfWeek)) {
-      break
+      const year = checkDate.getFullYear()
+      const month = String(checkDate.getMonth() + 1).padStart(2, '0')
+      const day = String(checkDate.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
     }
-    issueDate.setDate(issueDate.getDate() + 1)
+    checkDate.setDate(checkDate.getDate() + 1)
   }
 
-  // 格式化为 YYYY-MM-DD
-  const month = String(issueDate.getMonth() + 1).padStart(2, '0')
-  const day = String(issueDate.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return '-'
 }
 
 const onTypeChange = () => {

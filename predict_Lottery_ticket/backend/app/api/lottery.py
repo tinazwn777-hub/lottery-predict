@@ -97,7 +97,7 @@ async def crawl_data(limit: int = Query(50, ge=1, le=500, description="爬取期
 class PredictRequest(BaseModel):
     """预测请求"""
     lottery_type: str
-    method: str = Query("frequency", description="预测方法: frequency/hot_cold/missing/random")
+    method: str = Query("smart", description="预测方法: frequency/hot_cold/missing/smart")
     count: int = Query(1, ge=1, le=10, description="生成注数")
 
 
@@ -116,10 +116,10 @@ async def create_prediction(request: PredictRequest):
     生成预测号码
 
     支持的预测方法:
-    - frequency: 基于号码频率（推荐）
+    - smart: 智能综合策略（推荐）- 综合多维度分析自动生成最优预测
+    - frequency: 基于号码频率
     - hot_cold: 基于冷热号分析
     - missing: 基于遗漏值分析
-    - random: 随机生成
     """
     if request.lottery_type not in LOTTERY_CONFIG:
         raise HTTPException(status_code=400, detail=f"不支持的彩种: {request.lottery_type}")

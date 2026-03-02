@@ -16,7 +16,7 @@ export const getHistory = (type, limit = 50, offset = 0) =>
 export const getLatest = (type) => api.get(`/lottery/${type}/latest`)
 
 // 爬取数据
-export const crawlData = (limit = 50) => api.post('/lottery/crawl', null, { params: { limit } })
+export const crawlData = (limit = 50) => api.post('/lottery/crawl', {}, { params: { limit } })
 
 // 生成预测
 export const predict = (type, method = 'frequency', count = 1) =>
